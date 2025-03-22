@@ -53,6 +53,18 @@ public class BigramFrequencyPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			if (words.length > 1) {
+				String previousWord = words[0];
+				for (int i = 1; i < words.length; i++) {
+					String currentWord = words[i];
+					if (currentWord.length() == 0) {
+						continue;
+					}
+					BIGRAM.set(previousWord, currentWord);
+					context.write(BIGRAM, ONE);
+					previousWord = currentWord;
+				}
+			}
 		}
 	}
 
@@ -65,15 +77,42 @@ public class BigramFrequencyPairs extends Configured implements Tool {
 		// Reuse objects.
 		private final static FloatWritable VALUE = new FloatWritable();
 
+
 		@Override
 		public void reduce(PairOfStrings key, Iterable<IntWritable> values,
 				Context context) throws IOException, InterruptedException {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			String currentWord = null;
+			int marginal = 0;
+
+			String leftWord = key.getLeftElement();
+			if (currentWord == null || !currentWord.equals(leftWord)) {
+				if (currentWord != null) {
+					context.write(new PairOfStrings(currentWord, ""), new FloatWritable(marginal));
+				}
+				currentWord = leftWord;
+				marginal = 0;
+			}
+
+			int sum = 0;
+			for (IntWritable value : values) {
+				sum += value.get();
+			}
+			marginal += sum;
+			VALUE.set((float) sum / marginal);
+			context.write(key, VALUE);
+
+			// Ensure the last word's marginal count is written
+			if (!context.nextKeyValue()) {
+				context.write(new PairOfStrings(currentWord, ""), new FloatWritable(marginal));
+			}
+
 		}
+
 	}
-	
+
 	private static class MyCombiner extends
 			Reducer<PairOfStrings, IntWritable, PairOfStrings, IntWritable> {
 		private static final IntWritable SUM = new IntWritable();
@@ -84,6 +123,12 @@ public class BigramFrequencyPairs extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			int sum = 0;
+			for (IntWritable value : values) {
+				sum += value.get();
+			}
+			SUM.set(sum);
+			context.write(key, SUM);
 		}
 	}
 

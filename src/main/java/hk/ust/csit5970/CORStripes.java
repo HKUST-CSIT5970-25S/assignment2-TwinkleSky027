@@ -43,6 +43,17 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			while (doc_tokenizer.hasMoreTokens()) {
+				String word = doc_tokenizer.nextToken().toLowerCase();
+				if (word_set.containsKey(word)) {
+					word_set.put(word, word_set.get(word) + 1);
+				} else {
+					word_set.put(word, 1);
+				}
+			}
+			for (Map.Entry<String, Integer> entry : word_set.entrySet()) {
+				context.write(new Text(entry.getKey()), new IntWritable(entry.getValue()));
+			}
 		}
 	}
 
@@ -56,6 +67,11 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			int sum = 0;
+			for (IntWritable value : values) {
+				sum += value.get();
+			}
+			context.write(key, new IntWritable(sum));
 		}
 	}
 
@@ -75,6 +91,20 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			List<String> words = new ArrayList<>(sorted_word_set);
+			for (int i = 0; i < words.size(); i++) {
+				MapWritable map = new MapWritable();
+				for (int j = i + 1; j < words.size(); j++) {
+					Text neighbor = new Text(words.get(j));
+					if (map.containsKey(neighbor)) {
+						IntWritable count = (IntWritable) map.get(neighbor);
+						count.set(count.get() + 1);
+					} else {
+						map.put(neighbor, new IntWritable(1));
+					}
+				}
+				context.write(new Text(words.get(i)), map);
+			}
 		}
 	}
 
@@ -89,6 +119,19 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			MapWritable combined = new MapWritable();
+			for (MapWritable value : values) {
+				for (Writable k : value.keySet()) {
+					IntWritable fromCount = (IntWritable) value.get(k);
+					if (combined.containsKey(k)) {
+						IntWritable count = (IntWritable) combined.get(k);
+						count.set(count.get() + fromCount.get());
+					} else {
+						combined.put(k, fromCount);
+					}
+				}
+			}
+			context.write(key, combined);
 		}
 	}
 
@@ -142,6 +185,27 @@ public class CORStripes extends Configured implements Tool {
 			/*
 			 * TODO: Your implementation goes here.
 			 */
+			MapWritable combined = new MapWritable();
+			for (MapWritable value : values) {
+				for (Writable k : value.keySet()) {
+					IntWritable fromCount = (IntWritable) value.get(k);
+					if (combined.containsKey(k)) {
+						IntWritable count = (IntWritable) combined.get(k);
+						count.set(count.get() + fromCount.get());
+					} else {
+						combined.put(k, fromCount);
+					}
+				}
+			}
+
+			int total = word_total_map.containsKey(key.toString()) ? word_total_map.get(key.toString()) : 1;
+			for (Writable k : combined.keySet()) {
+				IntWritable count = (IntWritable) combined.get(k);
+				int neighborTotal = word_total_map.containsKey(k.toString()) ? word_total_map.get(k.toString()) : 1;
+				double cor = (double) count.get() / (total * neighborTotal);
+				context.write(new PairOfStrings(key.toString(), k.toString()), new DoubleWritable(cor));
+			}
+
 		}
 	}
 
